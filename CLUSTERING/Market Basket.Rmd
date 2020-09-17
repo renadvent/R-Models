@@ -1,0 +1,46 @@
+---
+title: "Wine Good Score Prediction"
+output:
+  html_document:
+    df_print: paged
+---
+
+Here we are going to be using Market Basket Analysis to try to predict what features of a wine help determine whether it gets good reviews. The lowest score in the dataset is 80, so we will define "good" as a score above 90 points. First we will load the data, and select our features. We will also factor the score between those which score 90 and below, and those that are above 90.
+
+```{r}
+library(arules)
+winemag.data_first150k <- read.csv("winemag-data_first150k.csv", header=TRUE)
+winemag.data_first150k <- winemag.data_first150k[complete.cases(winemag.data_first150k), ]
+n_data <- winemag.data_first150k[complete.cases(winemag.data_first150k), c("designation","province","variety","winery", "points") ]
+positive_score=90
+n_data$points <- factor(ifelse(n_data$points > positive_score, "good", "bad"))
+```
+Now we will look at how the factorization of the score distributed the data
+```{r}
+table(n_data$points)
+```
+As we can see, it gave us a decent split. We have fewer "good" reviews than "bad" reviews which can help us narrow down the attributes that can lead to good reviews.
+
+We will now train the model and look at the general results
+```{r}
+basket <- apriori(n_data,parameter = list(support =
+                            0.006, confidence = 0.25, minlen = 2))
+
+
+table(n_data$points)
+summary(basket)
+inspect(basket[1:5])
+```
+The model came out with 252 rules.
+
+Now we will look specifically at the rules that the model assocated a good score with.
+```{r}
+positive_rules <- subset(basket, items %in% "points=good")
+positive_rules
+inspect(positive_rules)
+
+
+```
+So the model came up with 17 rules that lead to a good review sccore, which is a manageable number of rules.
+
+According the the rules, we can gain some insight. For example, wine from Burgundy has a good chance of being good. So if you don't know much about wine, getting a wine that came from Burgundy is likely to be a good choise. Also as far as variety, Syrah is a good choice. These rules help predict whether a wine got a good review score.

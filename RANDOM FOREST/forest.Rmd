@@ -1,0 +1,124 @@
+---
+title: "Win Prediction with Random Forest"
+output: html_notebook
+---
+We will test whether certain stats can help predict whether a team will win. The stats we will be using are the field goal percentage, free throw percentage, three-pointer percentage, assists, and rebounds of each team.
+
+Our target feature will be whether or not the home team wins when these stats are taken into account.
+
+First we will load the libraries we will be using. We will be using the C50 library for our classification model.
+
+```{r message=FALSE, warning=FALSE}
+library(C50)
+library(caret)
+library(gmodels)
+library(pROC)
+library(randomForest)
+```
+Now we will load the data, select our features, and normalize the data. We will also set our variables for how much data we will use to train the model, and how much data the model is tested on. We will also factorize whether the home team wins or not.
+```{r}
+# the file we will be loading
+file <- read.csv("games.csv", header=TRUE, stringsAsFactors = FALSE)
+
+# subset of file with columns that will actually be used, and are complete cases
+all_data <- file[complete.cases(file),c("FG_PCT_home","FT_PCT_home","FG3_PCT_home","AST_home",
+                                  "REB_home","HOME_TEAM_WINS","PTS_home","PTS_away",
+                                  "FG_PCT_away","FT_PCT_away","FG3_PCT_away",	
+                                  "AST_away",	"REB_away")]
+
+#test all cases complete
+sum(complete.cases(all_data))
+sum(is.na(all_data))
+
+#factorize home team
+all_data$HOME_TEAM_WINS<-factor(all_data$HOME_TEAM_WINS,levels=c(0,1),labels=c("W","L"))
+
+train_num = 17500
+test_num = 2500
+total=train_num+test_num
+
+#create a normlized version of the data.
+n_data <- all_data[ 1:total , c("FG_PCT_home","FT_PCT_home","FG3_PCT_home","AST_home",
+                                  "REB_home",
+                                  "FG_PCT_away","FT_PCT_away","FG3_PCT_away",	
+                                  "AST_away",	"REB_away")]
+
+summary(n_data)
+
+normalize <- function(x) {
+    return ((x - min(x,na.rm = TRUE)) /  (max(x,na.rm = TRUE) - min(x,na.rm = TRUE)))
+}
+
+n_data <- as.data.frame(lapply(n_data, normalize))
+
+summary(n_data)
+
+```
+Noting from above, we have 22945 complete cases in the data set, and no NA's, also the data was normalized correctly.
+
+Now we will segment the data between what we will train it on, and what we will test it on.
+```{r paged.print=TRUE}
+#segment training data
+train_data <- n_data[ (1:train_num) , ]
+train_labels <- all_data$HOME_TEAM_WINS[ (1:train_num) ]
+
+#segment testing data
+test_data <- n_data[ (train_num + 1) : (train_num+test_num), ]
+test_labels <- all_data$HOME_TEAM_WINS[ (train_num+1) : (train_num+test_num)]
+```
+Now we will now train a subset of the data on the model. And also take a look at the statistics.
+```{r}
+model <- randomForest(train_data, train_labels)
+pred_labels <- predict(model, test_data)
+
+model
+
+CrossTable(test_labels, pred_labels,
+             prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+             dnn = c('actual default', 'predicted default'))
+
+confusionMatrix(pred_labels,
+    test_labels, positive = "W")
+
+```
+From this we can see that the model gave us a pretty good accuracy right away. It correctly identified 84% of the testing samples. It also has a good Kappa value.
+
+We will now try to train the model to try and find an even better model. We will use the ROC curve to pick out the best one.
+```{r message=FALSE, warning=FALSE}
+ctrl <- trainControl(method = "repeatedcv",
+                       repeats = 2, number = 10,
+                       selectionFunction = "best",
+                       savePredictions = TRUE,
+                       classProbs = TRUE,
+                       summaryFunction = twoClassSummary)
+
+grid_rf <- expand.grid(mtry = c(1, 4, 8, 16))
+
+RNGversion("3.5.2"); set.seed(300)
+
+m_rf <- train(y=train_labels, x = train_data, method = "rf",
+                metric = "ROC", trControl = ctrl,
+                tuneGrid = grid_rf)
+
+```
+Now we will plot an ROC curve. And take a look at the results.
+```{r}
+m_rf
+
+m_rf$finalModel
+
+roc_rf <- roc(m_rf$pred$obs, m_rf$pred$W)
+plot(roc_rf, col = "red", legacy.axes = TRUE)
+```
+Now we will use the model that resulted and see if our results have improved over the original random forest model.
+```{r}
+pred_labels <- predict(m_rf,test_data)
+
+table(pred_labels,test_labels)
+
+confusionMatrix(pred_labels,
+    test_labels, positive = "W")
+```
+The result from the trained model is actually slightly less than the first random forest we tried. So we will stay with the original as our model which had an accuracy rate of 84%. 
+
+It appears that with the data given, we were able to predict reasonably accurately whether the home team would win a game.

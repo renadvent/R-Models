@@ -1,0 +1,129 @@
+---
+title: "Win Prediction"
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+---
+
+OBJECTIVE:
+
+In this project, I will be testing the ability to use game data such as Field Goal Percentage to predict whether a team is more likely to win.
+
+KNN -- Prediction Model Analysis
+
+Step 1: We will load the data, and the applicable packages we will use for anlysis. We will also look at a summary of the data
+```{r}
+#LOAD DATA AND LIBRARIES
+
+#data set
+games<-read.csv("games.csv", header=FALSE, stringsAsFactors = FALSE)
+
+#libraries
+library(class)
+library(gmodels)
+library(Amelia)
+
+```
+Step 2: We have to fix the data by removing unnecessary factors such as the date of the game, etc. We will also be removing the scores of the teams from the data since we will only be testing whether certain attributes affect win percentage.
+```{r message=FALSE, warning=FALSE}
+#FIX DATA
+
+#set column names to the first row of data
+colnames(games)<-games[1, ]
+
+#get rid of unneeded columns
+games$GAME_DATE_EST <- NULL
+games$GAME_STATUS_TEXT <- NULL
+games$HOME_TEAM_ID <-NULL
+games$VISITOR_TEAM_ID <- NULL
+games$SEASON <- NULL
+games$TEAM_ID_home <- NULL
+games$TEAM_ID_away <- NULL
+games$GAME_ID <- NULL
+
+games$PTS_away <- NULL
+games$PTS_home <- NULL
+
+#factor data based on whether home team wins
+games$HOME_TEAM_WINS<-factor(games$HOME_TEAM_WINS,levels=c(0,1),labels=c("W","L"))
+
+```
+Here we will convert the data to the correct type, and get rid of any rows with NA vlues
+```{r message=FALSE, warning=FALSE}
+#convert data from character to numeric
+games_data<-as.data.frame(apply(games[1:10],2,as.numeric))
+
+#get rid of NA rows from target labels
+games_target_labels<-games[complete.cases(games_data),11]
+
+#get rid of NA from data
+games_data = games_data[complete.cases(games_data), ]
+
+g2 <- games_data
+g2['HOME_TEAM_WINS'] <- games_target_labels
+
+```
+Here we will normalize the data, and test if there is missing data.
+```{r}
+#create normalization function
+normalize<-function(x){
+    return((x-min(x,na.rm=TRUE))/(max(x,na.rm=TRUE)-min(x,na.rm=TRUE)))
+}
+
+#normalize from game data
+games_n<-as.data.frame(lapply(games_data[1:10],normalize))
+
+#test if there is missing data
+missmap(games_n, main = "Missing values vs observed")
+```
+Step 3: We will seperate the training data from the testing data
+```{r}
+#seperate training from testing data
+games_train<-games_n[1:18400, ]
+games_test<-games_n[18401:22945, ]
+
+#seperate training from testing labels
+games_train_labels<-games_target_labels[1:18400]
+games_test_labels<-games_target_labels[18401:22945]
+```
+Step 4: We will run the Knn tests
+
+After testing many values, I found that k=51 gave a good result.
+```{r}
+#RUN KNN TESTS
+games_test_pred<-knn(train=games_train,test=games_test,cl=games_train_labels,k=51)
+
+CrossTable(x=games_test_labels,y=games_test_pred,prop.chisq = FALSE)
+```
+This shows that it predicts correctly about 84% of the time.
+
+We will attempt to imporve the performance of the knn model by using z-score
+```{r}
+#improving knn model performance
+#z-score
+
+games_z<-as.data.frame(scale(games_data[1:10]))
+#summary(games_z)
+
+z_train<-games_z[1:18400, ]
+z_test<-games_z[18401:22945, ]
+
+#seperate training from testing labels
+z_train_labels<-games_target_labels[1:18400]
+z_test_labels<-games_target_labels[18401:22945]
+
+z_test_pred<-knn(train=z_train,test=z_test,cl=z_train_labels,k=51)
+
+CrossTable(x=z_test_labels,y=z_test_pred,prop.chisq = FALSE)
+```
+Using z-score didn't improve the model.
+
+So we will try another k value
+```{r}
+z_test_pred<-knn(train=z_train,test=z_test,cl=z_train_labels,k=300)
+
+CrossTable(x=z_test_labels,y=z_test_pred,prop.chisq = FALSE)
+```
+Different k values all seem to be giving around the same total correct percentage rate. So by stayin with k=51, it gives the model an 84% correct rate. Out of 1901 actual win data, 75% was true positive. and out of 2644 actual lose data, 90% of it was true negative. So  the model seems to be able to determine Losses with better accuracy than it determines wins.

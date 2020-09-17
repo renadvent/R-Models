@@ -1,0 +1,33 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1585763677884.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "F8395FDA",
+    "lastKnownWriteTime" : 8028074745928250478,
+    "last_content_update" : 1585763677884,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "976FFDCC",
+        "caption" : "lyrics",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=lyrics&cache_key=976FFDCC",
+        "displayedObservations" : 339277,
+        "environment" : "",
+        "expression" : "lyrics",
+        "object" : "lyrics",
+        "preview" : 0,
+        "totalObservations" : 339277,
+        "variables" : 6
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

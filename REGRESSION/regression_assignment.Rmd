@@ -1,0 +1,163 @@
+---
+title: "Linear Regression"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+OBJECTIVE:
+
+Here I will try to determine whether a basketball team's stats can help predict how much they will win or lose by in a game. 
+
+We will load the libraries
+```{r, message=FALSE, warning=FALSE}
+
+#LOAD DATA AND LIBRARIES
+
+#libraries
+library(class)
+library(gmodels)
+library(Amelia)
+library(ISLR)
+library(caret)
+library(readxl)
+library(pROC)
+library(lattice)
+library(ggplot2)
+library(dplyr)
+library(e1071) 
+library(corrplot)
+library(kknn)
+library(ggplot2)
+library(multiROC)
+library(MLeval)
+library(AppliedPredictiveModeling)
+library(corrplot)
+library(Hmisc)
+library(dplyr)
+library( ggfortify)
+library (magrittr)
+library (car)
+library (broom)
+library (psych)
+
+```
+We have to load and fix the data to our purposes by removing unnecessary factors such as the date of the game, team name, etc. We will also seperate out some of the columns to help us try out different combinations manually for the linear regression model.
+```{r}
+# GET SPECIFIC DATA
+
+file <- 0 # the file we will be loading
+all_data <- 0 # subset of file with columns that will actually be used, 
+              # and are complete cases + win_difference
+home_stats <- 0 # subset of all_data containing only home team stats (except points)
+away_stats <- 0 # subset of all_data containing only away team stats (except points)
+win_difference <- 0 # home teams score - away team score
+home_team_wins <- 0 # basically a binary of win_difference (factored)
+
+file <- read.csv("games.csv", header=TRUE, stringsAsFactors = FALSE) #load data
+all_data <- file[complete.cases(c("FG_PCT_home","FT_PCT_home","FG3_PCT_home","AST_home",
+                                  "REB_home","HOME_TEAM_WINS","PTS_home","PTS_away",
+                                  "FG_PCT_away","FT_PCT_away","FG3_PCT_away",	
+                                  "AST_away",	"REB_away")), ]
+all_data$win_difference=(all_data$PTS_home-all_data$PTS_away)
+home_stats <- all_data[c("FG_PCT_home","FT_PCT_home","FG3_PCT_home","AST_home","REB_home")]
+away_stats <- all_data[c("FG_PCT_away","FT_PCT_away","FG3_PCT_away","AST_away","REB_away")]
+win_difference <- all_data$win_difference
+home_team_wins <- all_data$HOME_TEAM_WINS
+all_data$HOME_TEAM_WINS<-factor(all_data$HOME_TEAM_WINS,levels=c(0,1),labels=c("W","L"))
+
+lm_test_1 <- 0 # lm model test using home_stats and win difference
+lm_test_2 <- 0 # lm model test using home_stats and win difference and home_team_wins
+lm_test_3 <- 0 # lm model test using home_stats and away stats and win difference and 
+                                                                      # home team wins
+lm_test_4 <- 0 # lm model test using home_stats and away stats
+
+lm_test_1 <- lm(win_difference ~ . ,data=cbind(home_stats,win_difference))
+lm_test_2 <- lm(win_difference ~ . ,data=cbind(home_stats,win_difference,home_team_wins))
+lm_test_3 <- lm(win_difference ~ . ,data=cbind(home_stats, away_stats, win_difference,
+                                               home_team_wins))
+lm_test_4 <- lm(win_difference ~ . ,data=cbind(home_stats, away_stats, win_difference))
+
+summary (lm_test_1)
+summary (lm_test_2)
+summary (lm_test_3) #lm_test_3 seems to be the best model to manually come up with
+summary (lm_test_4)
+```
+
+From these results, it seems like the 1st combination was the worst with an adjusted R-squared value of 0.496, while 3rd combination of features we tried had the best predictiton rate, with an adjusted R-squared of 0.818, so we will try to improve upon this model. Below we will try AIC to test to see if we can find a better model from these features. We will also test for multicollinear features.
+```{r}
+
+step_model <- 0 #uses AIC to check for a better model
+
+step_model <- MASS::stepAIC(lm_test_3, direction="both", trace=FALSE)
+summary (step_model)
+step_model.diagnostics <- augment(step_model)
+head(step_model.diagnostics)
+
+lm_test_3$call
+step_model$call
+
+
+vif(step_model) %>% 
+  knitr::kable() 
+
+```
+
+As we can see from above, the results are the same, so the model was not improved through AIC. It also doesn't seem like there are multicollinear features based on the results of the vif test. So below we will generate graphs and look at them to try to figure out different techniques we can try to improve the results
+
+```{r}
+# Diagnostic Plots:
+
+#ceresPlots(step_model)
+
+#ggplot(step_model.diagnostics, aes(win_difference, FG_PCT_home)) + geom_point() + stat_smooth(method = lm, se = FALSE) + geom_segment(aes(xend = win_difference, yend = .fitted), color = "red", size = 0.3)
+
+autoplot( step_model)
+
+#plot(step_model, 4)
+# Residuals vs Leverage
+#plot(step_model, 5)
+
+
+
+```
+
+Below we will look at the plots of just the home team stats to get an idea of correlation between the different traits
+```{r}
+
+pairs(all_data[c("FG_PCT_home","FT_PCT_home","FG3_PCT_home","AST_home","REB_home","win_difference","HOME_TEAM_WINS")])
+```
+
+
+```{r}
+pairs.panels(all_data[c("FG_PCT_home","FT_PCT_home","FG3_PCT_home","AST_home","REB_home","win_difference","HOME_TEAM_WINS")])
+
+```
+
+Here we will try creating new variables (collumns) to see if perhaps there are nonlinear relationships that can improve the model.
+We will also try converting some numeric variables to binary indicators. We will try introducing the field goal percentage of both home and away as nonlinear terms, and introducing some binary variables.
+```{r}
+
+new_data <- 0 # new data frame to try to create a model from
+
+new_data <- cbind(home_stats, away_stats, win_difference,home_team_wins)
+
+new_data$FG_PCT_home2 <-new_data$FG_PCT_home^2
+new_data$FG_PCT_away2 <-new_data$FG_PCT_home^2
+
+new_data$FG50_home <- ifelse(new_data$FG_PCT_home >= .5, 1, 0)
+new_data$FG50_away <- ifelse(new_data$FG_PCT_away >= .5, 1, 0)
+
+reg_model_2 <- 0 # testing a new model
+
+reg_model_2 <- lm(win_difference ~ ., data = new_data)
+summary (reg_model_2)
+
+step_model_2 <- MASS::stepAIC(reg_model_2, direction="both", trace=FALSE)
+summary (step_model_2)
+
+```
+
+Trying to add columns and using AIC again didn't really improve the model much. The Adjusted R-squared value is now .8184, which is a huge improvement from the first linear regression model we tried which produced an Adjusted R-squared value of 0.496.
+
+SO it looks like a teams efficiency (stats by percentage, rather than absolute points) can give a pretty good estimate of how much the team will win or lose by.

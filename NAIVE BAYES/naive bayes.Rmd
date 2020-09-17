@@ -1,0 +1,136 @@
+---
+title: "Naive Bayes"
+output:
+  html_document:
+    df_print: paged
+---
+Objective: Determine if a song is by the artist Drake based on the lyrics.
+
+Step 1: We will load the libraries we will be using, and load the dataset we will be using. It includes the artist names, son names, year, genre, and the song lyrics. Since we are using Naive Bayes, we still start by factoring the data based on whether the artist is Drake or not, and then take a look at the data.
+```{r}
+
+library (tm)
+library(SnowballC)
+library(dplyr)
+library(e1071)
+library(gmodels)
+
+lyrics_raw <- read.csv("lyrics.csv", stringsAsFactors=FALSE)
+
+artist_name <- "drake"
+train_size <- 7500
+num_of_songs <- 10000
+
+lyrics_raw$artist <- ifelse(lyrics_raw$artist == artist_name, artist_name, "other_artist")
+#lyrics_raw$artist <- ifelse(lyrics_raw$artist == "eminem", "eminem", "other_artist")
+lyrics_raw$artist <- factor(lyrics_raw$artist)
+summary(lyrics_raw)
+head (lyrics_raw)
+```
+So we can see that Artist section now has 2 factors: drake and other_artist. We will now look at the data set to see what proportion of the songs are by Drake, and which are by other artists, and also the number of songs by each.
+```{r}
+prop.table(table(lyrics_raw$artist))
+artist_songs <- subset (lyrics_raw, artist==artist_name)
+summary (artist_songs)
+other_artist_songs <- subset(lyrics_raw, artist=="other_artist")
+summary (other_artist_songs)
+```
+
+Now we will take a subset of the data since the data set has almost 350,000 songs on it. We will bring this down to 10,000. We will collect all the songs by Drake, and add a random selection of other songs from the list to make this subset. We will then randomize the order of this subset so that when we seperate the data for testing and training, it will be proportional.
+```{r}
+lyrics_raw <- rbind(artist_songs,sample_n(other_artist_songs,num_of_songs-nrow(artist_songs))) #9614))
+
+#randomize order
+set.seed(42)
+rows <- sample(nrow(lyrics_raw))
+lyrics_raw <- lyrics_raw[rows, ]
+
+prop.table(table(lyrics_raw$artist))
+
+```
+Now we will convert the lyrics into a Corpus and clean the data
+```{r}
+
+lyrics_corpus <- VCorpus(VectorSource(lyrics_raw$lyrics))
+
+#clean corpus
+lyrics_corpus_clean <- tm_map(lyrics_corpus,
+    content_transformer(tolower))
+lyrics_corpus_clean <- tm_map(lyrics_corpus_clean, removeNumbers)
+lyrics_corpus_clean <- tm_map(lyrics_corpus_clean,
+    removeWords, stopwords())
+lyrics_corpus_clean <- tm_map(lyrics_corpus_clean, removePunctuation)
+lyrics_corpus_clean <- tm_map(lyrics_corpus_clean, stemDocument)
+lyrics_corpus_clean <- tm_map(lyrics_corpus_clean, stripWhitespace)
+
+
+```
+Next, we will use the clean data to create a DTM, and seperate the training and testin data. Will then check to make sure that both sets have somewhat of an equal proportion of Drake songs, and songs by other artists.
+```{r}
+lyrics_dtm <- DocumentTermMatrix(lyrics_corpus_clean) #create dtm
+```
+
+
+```{r}
+#seperate training data from testing data
+lyrics_dtm_train <- lyrics_dtm[1:train_size, ]
+lyrics_dtm_test <- lyrics_dtm[(train_size+1):num_of_songs, ]
+
+lyrics_dtm_train_labels <- lyrics_raw[1:train_size, ]$artist
+lyrics_dtm_test_labels <- lyrics_raw[(train_size+1):num_of_songs, ]$artist
+
+#check proportions of drake to other artists in the partitions
+prop.table(table(lyrics_dtm_train_labels))
+prop.table(table(lyrics_dtm_test_labels))
+
+
+```
+The percentages are almost identical, so we can continue. We will now find frequently used words and will convert counts to categorical data in preparation for use with Naive Bayes.
+```{r}
+#find frequently used words
+lyrics_freq_words <- findFreqTerms(lyrics_dtm_train, 20)
+
+lyrics_dtm_freq_train <- lyrics_dtm_train[ , lyrics_freq_words]
+lyrics_dtm_freq_test <- lyrics_dtm_test[ , lyrics_freq_words]
+
+#convert counts to categorical data
+convert_counts <- function(x) {
+    x <- ifelse(x > 0, "Yes", "No")
+  }
+
+lyrics_dtm_train <- apply(lyrics_dtm_freq_train, MARGIN = 2, convert_counts)
+lyrics_dtm_test  <- apply(lyrics_dtm_freq_test, MARGIN = 2, convert_counts)
+```
+We will now create the model and make predictions and look at the results
+```{r}
+#create model and predict
+lyrics_classifier <- naiveBayes(lyrics_dtm_train, lyrics_dtm_train_labels)
+lyrics_test_pred <- predict(lyrics_classifier, lyrics_dtm_test)
+
+CrossTable(lyrics_test_pred, lyrics_dtm_test_labels,
+    prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+    dnn = c('predicted', 'actual'))
+```
+The model has about 92% accuracy when determining whether or not a song is by Drake in the testing set. We will now try adjusting the Lapalce to see if we can increase the accuracy even more.
+```{r}
+#try with a laplace modifier
+lyrics_classifier2 <- naiveBayes(lyrics_dtm_train, lyrics_dtm_train_labels, laplace=100)
+lyrics_test_pred2 <- predict(lyrics_classifier, lyrics_dtm_test)
+
+CrossTable(lyrics_test_pred2, lyrics_dtm_test_labels,
+    prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+    dnn = c('predicted', 'actual'))
+```
+```
+Changing the Laplace estimator did not change the prediction percentage of the model. However, 92% is a really good model. We were able to build a model that predicts whether or not a song's lyrics are from a Drake song, or a song by another artist. Interestingly, this shows that Drake lyrics are recognizable and are in some way unique enough to be differentiated by the Naive Bayes model. It would be very interesting to repeat this experiment with other artists, and see if it is normal for lyrics of a song to be able to predict the artist.
+
+
+
+
+
+
+
+
+
+
+

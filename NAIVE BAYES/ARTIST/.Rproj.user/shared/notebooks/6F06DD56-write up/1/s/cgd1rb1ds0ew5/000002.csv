@@ -1,0 +1,1 @@
+"0","lyrics_dtm <- DocumentTermMatrix(lyrics_corpus_clean) #create dtm"

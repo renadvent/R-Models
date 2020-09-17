@@ -1,0 +1,26 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1585795021890.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "B319251A",
+    "lastKnownWriteTime" : 19703480301060211,
+    "last_content_update" : 1585795021890,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "id" : "42e5846dd4144b4f816fb35c7bb50a66",
+        "name" : "lyrics_dtm",
+        "title" : "lyrics_dtm"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 4,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "object_explorer"
+}
